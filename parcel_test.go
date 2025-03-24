@@ -31,7 +31,7 @@ func getTestParcel() Parcel {
 // TestAddGetDelete проверяет добавление, получение и удаление посылки
 func TestAddGetDelete(t *testing.T) {
 	// prepare
-	db, err := sql.Open("sqlite", "tracker.db") // использование in-memory базы для тестов
+	db, err := sql.Open("sqlite", "tracker.db") // используем in-memory БД для тестов
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -46,19 +46,19 @@ func TestAddGetDelete(t *testing.T) {
 	// get
 	storedParcel, err := store.Get(id)
 	require.NoError(t, err)
-	require.Equal(t, parcel.Client, storedParcel.Client)
-	require.Equal(t, parcel.Status, storedParcel.Status)
-	require.Equal(t, parcel.Address, storedParcel.Address)
-	require.Equal(t, parcel.CreatedAt, storedParcel.CreatedAt)
+
+	// Устанавливаем номер посылки перед сравнением, так как он задается БД
+	parcel.Number = id
+	require.Equal(t, parcel, storedParcel)
 
 	// delete
 	err = store.Delete(id)
 	require.NoError(t, err)
 
 	// try getting deleted parcel
-	storedParcel, err = store.Get(id)
-	require.Error(t, err) // ошибка, так как посылка должна быть удалена
-	require.Equal(t, sql.ErrNoRows, err)
+	_, err = store.Get(id)
+	require.Error(t, err)                  // ожидаем ошибку, так как посылка должна быть удалена
+	require.ErrorIs(t, err, sql.ErrNoRows) // корректный способ проверки ошибки
 }
 
 // TestSetAddress проверяет обновление адреса
@@ -116,7 +116,7 @@ func TestSetStatus(t *testing.T) {
 // TestGetByClient проверяет получение посылок по идентификатору клиента
 func TestGetByClient(t *testing.T) {
 	// prepare
-	db, err := sql.Open("sqlite", "tracker.db") // использование in-memory базы для тестов
+	db, err := sql.Open("sqlite", "tracker.db") // используем in-memory БД
 	require.NoError(t, err)
 	defer db.Close()
 
@@ -127,35 +127,29 @@ func TestGetByClient(t *testing.T) {
 		getTestParcel(),
 		getTestParcel(),
 	}
-	parcelMap := map[int]Parcel{}
 
-	// задаём всем посылкам один и тот же идентификатор клиента
+	// задаем всем посылкам один и тот же client ID
 	client := randRange.Intn(10_000_000)
-	parcels[0].Client = client
-	parcels[1].Client = client
-	parcels[2].Client = client
+	for i := range parcels {
+		parcels[i].Client = client
+	}
 
-	// add
-	for i := 0; i < len(parcels); i++ {
+	// добавляем в базу
+	for i := range parcels {
 		id, err := store.Add(parcels[i])
 		require.NoError(t, err)
 
-		// обновляем идентификатор добавленной у посылки
+		// обновляем номер посылки перед сравнением
 		parcels[i].Number = id
-
-		// сохраняем добавленную посылку в структуру map
-		parcelMap[id] = parcels[i]
 	}
 
-	// get by client
+	// получаем из базы
 	storedParcels, err := store.GetByClient(client)
 	require.NoError(t, err)
 
-	// check
-	require.Len(t, storedParcels, len(parcels)) // проверяем, что количество посылок совпадает
-	for _, storedParcel := range storedParcels {
-		// убеждаемся, что все посылки из storedParcels есть в parcelMap
-		require.Contains(t, parcelMap, storedParcel.Number)
-		require.Equal(t, parcelMap[storedParcel.Number], storedParcel) // проверяем соответствие всех полей
-	}
+	// проверяем, что количество совпадает
+	require.Len(t, storedParcels, len(parcels))
+
+	// проверяем, что все посылки из БД совпадают с оригинальными
+	require.ElementsMatch(t, parcels, storedParcels)
 }
