@@ -8,12 +8,6 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const (
-	ParcelStatusRegistered = "registered"
-	ParcelStatusSent       = "sent"
-	ParcelStatusDelivered  = "delivered"
-)
-
 type Parcel struct {
 	Number    int
 	Client    int
@@ -98,8 +92,22 @@ func (s ParcelService) Delete(number int) error {
 
 func main() {
 	// настройте подключение к БД
+	db, err := sql.Open("sqlite", "tracker.db")
+	if err != nil {
+		fmt.Println("Ошибка подключения к БД:", err)
+		return
+	}
+	defer db.Close() // обязательно закрываем соединение с БД после использования
 
-	store := // создайте объект ParcelStore функцией NewParcelStore
+	// Проверим подключение к базе данных
+	err = db.Ping()
+	if err != nil {
+		fmt.Println("Ошибка при подключении к БД:", err)
+		return
+	}
+
+	// создаем объект ParcelStore с использованием подключения
+	store := NewParcelStore(db)
 	service := NewParcelService(store)
 
 	// регистрация посылки
